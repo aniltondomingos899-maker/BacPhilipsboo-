@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BAC ANALYTICS — Protótipo</title>
+<style>
+body{font-family:Arial,sans-serif;background:#0c0f14;color:#eee;margin:0;padding:22px}
+.card{max-width:850px;margin:auto;background:#151a22;border:1px solid #2b3442;border-radius:18px;padding:22px}
+h1{margin:0 0 4px}.sub{color:#9ba7b7}.buttons{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}
+button{border:0;border-radius:10px;padding:13px 20px;font-weight:bold;cursor:pointer;background:#273244;color:#fff}
+button:hover{filter:brightness(1.15)}.danger{background:#642d35}
+.box{background:#0e131a;border-radius:13px;padding:16px;margin-top:14px}
+.big{font-size:25px;font-weight:bold}.muted{color:#9ba7b7}.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{padding:7px 10px;border-radius:8px;background:#273244}.p{background:#183f31}.b{background:#40351c}.t{background:#3b2850}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.stat{background:#1b222d;padding:14px;border-radius:10px}
+.note{font-size:13px;color:#aab4c2;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>BAC ANALYTICS</h1><div class="sub">Protótipo de análise de sequência</div>
+
+<div class="buttons">
+<button onclick="add('P')">PLAYER</button>
+<button onclick="add('B')">BANKER</button>
+<button onclick="add('T')">TIE</button>
+<button class="danger" onclick="clearAll()">LIMPAR</button>
+</div>
+
+<div class="box"><div class="muted">Histórico</div><div id="history" class="chips">—</div></div>
+<div class="box"><div class="muted">Próximo palpite</div><div id="prediction" class="big">Aguardando 8+ resultados…</div></div>
+
+<div class="grid">
+<div class="stat"><div class="muted">Assertividade</div><div id="acc" class="big">0%</div></div>
+<div class="stat"><div class="muted">Palpites testados</div><div id="tested" class="big">0</div></div>
+<div class="stat"><div class="muted">Resultados</div><div id="n" class="big">0</div></div>
+</div>
+
+<div class="box note">
+<b>Como o protótipo funciona:</b> combina frequência recente, comportamento das últimas rodadas
+e transições observadas no histórico. A assertividade é calculada por <b>backtest</b>:
+o modelo faz o palpite usando apenas o que existia antes daquela rodada e depois compara com o resultado real.
+Isso evita contar como “acerto” uma previsão feita depois de conhecer o resultado.
+<br><br>
+<strong>Importante:</strong> em dados independentes, sequência passada não garante o próximo lançamento.
+Uma taxa elevada num histórico curto pode ser apenas variância. O objetivo desta versão é descobrir isso
+com dados, não inventar uma vantagem.
+</div>
+</div>
+
+<script>
+let r=[];
+const name={P:"PLAYER",B:"BANKER",T:"TIE"};
+
+function predict(h){
+  if(h.length<8)return null;
+  const x=h.slice(-30), score={P:0,B:0,T:0};
+  const count={P:0,B:0,T:0};
+  x.forEach(v=>count[v]++);
+  ["P","B","T"].forEach(k=>score[k]+=(count[k]/x.length)*.35);
+
+  const recent=x.slice(-8), rc={P:0,B:0,T:0};
+  recent.forEach(v=>rc[v]++);
+  ["P","B","T"].forEach(k=>score[k]+=(rc[k]/recent.length)*.25);
+
+  const last=x[x.length-1], tr={P:0,B:0,T:0};
+  for(let i=0;i<x.length-1;i++)if(x[i]===last)tr[x[i+1]]++;
+  const td=tr.P+tr.B+tr.T;
+  if(td) ["P","B","T"].forEach(k=>score[k]+=(tr[k]/td)*.25);
+
+  score.T*=.5;
+  const p=["P","B","T"].sort((a,b)=>score[b]-score[a])[0];
+  const sum=score.P+score.B+score.T;
+  return {p,conf:score[p]/sum*100};
+}
+function backtest(h){
+  let hit=0,total=0;
+  for(let i=8;i<h.length;i++){
+    const q=predict(h.slice(0,i));
+    if(q){total++;if(q.p===h[i])hit++;}
+  }
+  return {hit,total,acc:total?hit/total*100:0};
+}
+function add(v){r.push(v);render()}
+function clearAll(){r=[];render()}
+function render(){
+  const hist=document.getElementById("history");
+  hist.innerHTML=r.length?r.map(v=>`<span class="chip ${v.toLowerCase()}">${name[v]}</span>`).join(""):"—";
+  document.getElementById("n").textContent=r.length;
+  const q=predict(r);
+  document.getElementById("prediction").textContent=q?`${name[q.p]}  ·  confiança do modelo ${q.conf.toFixed(1)}%`:"Aguardando 8+ resultados…";
+  const bt=backtest(r);
+  document.getElementById("acc").textContent=bt.acc.toFixed(1)+"%";
+  document.getElementById("tested").textContent=bt.total;
+}
+render();
+</script>
+</body>
+</html>
